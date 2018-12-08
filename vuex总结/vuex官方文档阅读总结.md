@@ -130,7 +130,7 @@ computed: {
 
 
 
-#### mutation - 更改数据的唯一方法
+#### Mutation - 更改数据的唯一方法
 
 这个东西类似于事件，每一个都有一个`type`和`handler`
 
@@ -159,13 +159,180 @@ mutations: {
 }
 ```
 
+**mutation**需要遵守vue的相应规则
+
+也就是说，最好提前声明好要用的属性
+
+需要添加新属性的时候，使用`Vue.set(obj, 'newProp', 123)`或者使用新对象替代老对象`state.obj = { ...state.obj, newProp: 123 }`
+
+**使用常量替代Mutation事件类型**
+
+使用常量替代 mutation 事件类型在各种 Flux 实现中是很常见的模式。这样可以使 linter 之类的工具发挥作用，同时把这些常量放在**单独的文件中**可以让你的代码合作者对整个 app 包含的 mutation 一目了然。
+
+```js
+// mutation-types.js
+export const SOME_MUTATION = 'SOME_MUTATION'
+```
+
+```js
+// store.js
+import Vuex from 'vuex'
+import { SOME_MUTATION } from './mutation-types'
+
+const store = new Vuex.Store({
+  state: { ... },
+  mutations: {
+    // 我们可以使用 ES2015 风格的计算属性命名功能来使用一个常量作为函数名
+    [SOME_MUTATION] (state) {
+      // mutate state
+    }
+  }
+})
+```
+
+**mutation 必须是同步函数**
+
+两种提交mutation的方式
+
+1. 访问store的commit方法提交（小程序用这一种）
+
+2. 在根组件上注册了store属性的，可以使用对象扩展的方式，使用`mapMutations`将组件中的methods映射为store.commit调用
+
+   ```js
+   import { mapMutations } from 'vuex'
+   
+   export default {
+     // ...
+     methods: {
+       ...mapMutations([
+         'increment', // 将 `this.increment()` 映射为 `this.$store.commit('increment')`
+   
+         // `mapMutations` 也支持载荷：
+         'incrementBy' // 将 `this.incrementBy(amount)` 映射为 `this.$store.commit('incrementBy', amount)`
+       ]),
+       ...mapMutations({
+         add: 'increment' // 将 `this.add()` 映射为 `this.$store.commit('increment')`
+       })
+     }
+   }
+   ```
 
 
 
+#### Action - 异步函数都放这里哦
+
+类似于mutation，但是有两点不同
+
+它提交的是mutations，不是直接修改数据；可以包含任意异步操作
+
+action函数接收的参数是一个与store实例具有相同方法和属性的**context**对象，但它不是store本身哦
+
+可以使用**参数解构**来简化代码
+
+```js
+actions: {
+  increment ({ commit }) {
+    commit('increment')
+  }
+}
+```
+
+触发action使用`store.dispatch('increment')`
+
+也支持载荷方式和对象方式
+
+在组件中分发action也类似于mutation，两种方式一个直接调，一个是映射成`methods`
+
+小程序的话直接调用
+
+**组合多个action或者怎么知道异步什么时候结束呢**？
+
+使用 [async / await](https://tc39.github.io/ecmascript-asyncawait/)
+
+```js
+// 假设 getData() 和 getOtherData() 返回的是 Promise
+
+actions: {
+  async actionA ({ commit }) {
+    commit('gotData', await getData())
+  },
+  async actionB ({ dispatch, commit }) {
+    await dispatch('actionA') // 等待 actionA 完成
+    commit('gotOtherData', await getOtherData())
+  }
+}
+```
 
 
 
+#### Module - 将store分割成多个模块
 
+```js
+const moduleA = {
+  state: { ... },
+  mutations: { ... },
+  actions: { ... },
+  getters: { ... }
+}
+
+const moduleB = {
+  state: { ... },
+  mutations: { ... },
+  actions: { ... }
+}
+
+const store = new Vuex.Store({
+  modules: {
+    a: moduleA,
+    b: moduleB
+  }
+})
+
+store.state.a // -> moduleA 的状态
+store.state.b // -> moduleB 的状态
+```
+
+对于模块内部的 mutation 和 getter，接收的第一个参数是**模块的局部状态对象**。
+
+对于模块内部的 action，局部状态通过 `context.state` 暴露出来，根节点状态则为 `context.rootState`
+对于模块内部的 getter，根节点状态会作为第三个参数暴露出来
+
+```js
+getters: {
+    sumWithRootCount (state, getters, rootState) {
+      return state.count + rootState.count
+    }
+  }
+```
+
+**命名空间**
+
+默认情况下，模块内部的 action、mutation 和 getter 是注册在**全局命名空间**的——这样使得多个模块能够对同一 mutation 或 action 作出响应。
+
+如果希望你的模块具有更高的封装度和复用性，你可以通过添加 `namespaced: true` 的方式使其成为带命名空间的模块。
+
+**模块动态注册**
+
+在 store 创建**之后**，你可以使用 `store.registerModule` 方法注册模块
+
+**模块重用**
+
+多个store使用同一个模块，类似于组件的data
+
+```js
+const MyReusableModule = {
+  state () {
+    return {
+      foo: 'bar'
+    }
+  },
+  // mutation, action 和 getter 等等...
+}
+```
+
+
+
+目前就到此为止了
 
 
 
